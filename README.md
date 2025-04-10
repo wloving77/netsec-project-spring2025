@@ -27,9 +27,6 @@ gan_ids_project/
 │   └── synthetic/             # GAN-generated traffic samples
 │
 ├── notebooks/                 # Prototyping & exploration
-│   ├── 01_eda_baseline.ipynb
-│   ├── 02_gan_training.ipynb
-│   └── 03_ids_training_eval.ipynb
 │
 ├── src/                       # All core Python scripts
 │   ├── preprocessing/         # Cleaning & feature engineering
@@ -48,3 +45,115 @@ gan_ids_project/
 └── README.md                  # You're here!
 ```
 
+
+
+## 👥 Team Member CLI Responsibilities
+
+This section breaks down each group member’s CLI tasks, inputs, and outputs. Follow your section to complete your part of the pipeline — when all jobs are done, the project is ready for analysis and presentation.
+
+---
+
+### Member 1 – Data Engineer  
+**Goal:** Preprocess the raw dataset and generate clean training/test splits.
+
+**Command:**
+```bash
+python src/preprocessing/preprocess.py \
+    --input data/raw/CICIDS2017.csv \
+    --output_dir data/processed/ \
+    --attack_types 'DoS,GoldenEye,Heartbleed' \
+    --train_split 0.8
+```
+
+**Inputs:**
+- data/raw/CICIDS2017.csv — original dataset  
+- --attack_types — rare attack types to retain  
+- --train_split — ratio for splitting training/testing
+
+**Outputs:**
+- data/processed/train.csv  
+- data/processed/test.csv  
+- data/processed/columns.json
+
+✅ Produces the cleaned dataset for GAN and IDS training.
+
+---
+
+### Member 2 – GAN Developer  
+**Goal:** Train a GAN to generate synthetic samples for a selected rare attack.
+
+**Command:**
+```bash
+python src/gan/train_gan.py \
+    --input data/processed/train.csv \
+    --output data/synthetic/generated.csv \
+    --attack_type 'Heartbleed' \
+    --model_out experiments/gan_models/heartbleed_ctgan.pkl \
+    --samples 5000
+```
+
+**Inputs:**
+- data/processed/train.csv — preprocessed data  
+- --attack_type — rare class to model  
+- --samples — how many synthetic rows to generate
+
+**Outputs:**
+- data/synthetic/generated.csv — synthetic samples  
+- experiments/gan_models/heartbleed_ctgan.pkl — trained GAN model
+
+✅ Provides augmented data to improve IDS training.
+
+---
+
+### Member 3 – IDS Modeler  
+**Goal:** Train the IDS model on real + synthetic data and evaluate its performance.
+
+**Command:**
+```bash
+python src/ids/train_ids.py \
+    --real data/processed/train.csv \
+    --synthetic data/synthetic/generated.csv \
+    --test data/processed/test.csv \
+    --model_out experiments/ids_models/random_forest.pkl \
+    --results_dir experiments/results/
+```
+
+**Inputs:**
+- data/processed/train.csv — real training data  
+- data/synthetic/generated.csv — GAN-generated data  
+- data/processed/test.csv — test split
+
+**Outputs:**
+- experiments/ids_models/random_forest.pkl — trained model  
+- experiments/results/metrics.json — performance metrics  
+- experiments/results/confusion_matrix.png — evaluation chart
+
+✅ Shows how much GAN augmentation improves threat detection.
+
+---
+
+### Member 4 – Evaluator & Integrator  
+**Goal:** Analyze the quality of generated data and visualize model results.
+
+**Command:**
+```bash
+python src/utils/plot_utils.py \
+    --real data/processed/train.csv \
+    --synthetic data/synthetic/generated.csv \
+    --metrics experiments/results/metrics.json \
+    --out_dir experiments/results/
+```
+
+**Inputs:**
+- data/processed/train.csv — baseline reference  
+- data/synthetic/generated.csv — synthetic data  
+- experiments/results/metrics.json — IDS evaluation results
+
+**Outputs:**
+- experiments/results/tsne_distribution.png — real vs. synthetic comparison  
+- experiments/results/gan_vs_real_stats.json — stats report  
+- experiments/results/summary_report.md — for presentation use
+
+✅ Delivers final visualizations and analysis to report and present results.
+
+---
