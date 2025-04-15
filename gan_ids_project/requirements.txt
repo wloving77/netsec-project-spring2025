@@ -7,3 +7,6 @@ jupyter
 scapy
 sdv
 torch
+gdown
+sdv
+tensorflow
