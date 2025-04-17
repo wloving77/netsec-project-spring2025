@@ -91,7 +91,7 @@ class TVAEAugmentor:
 class CTGANAugmentor:
     """Generates synthetic data for minority attack categories using CTGAN"""
     
-    def __init__(self, df_train, categorical_cols, target_variable, minority_threshold=5000, epochs=50):
+    def __init__(self, df_train, categorical_cols, target_variable, minority_threshold=10000, epochs=50):
         self.minority_threshold = minority_threshold
         self.df_train = df_train.copy()
         self.epochs = epochs
@@ -108,7 +108,7 @@ class CTGANAugmentor:
         
         for category in minority_cats:
             real_data = train_attacks[train_attacks[self.target_variable] == category]
-            if len(real_data) < 100:
+            if len(real_data) < 10:
                 print(f"Skipping {category}. Insufficient samples (<10) for generating synthetic data.")
                 continue
             
