@@ -4,7 +4,7 @@
 
 - William Loving (wfl9zy)
 - Tripp Mims (cef7dn)
-- Joseph Okeno-Storms (compID)
+- Joseph Okeno-Storms (djm7rd)
 - Anders Gyllenhoff (ujx4ab)
 
 # Project Info:
