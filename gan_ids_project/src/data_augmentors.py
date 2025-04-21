@@ -60,7 +60,7 @@ class CTGANAugmentor:
             synthetic_df = pd.concat(synthetic_dfs, ignore_index=True)
             print("Size of synthetic data:", synthetic_df.shape)
             os.makedirs(self.synthetic_data_dir, exist_ok=True)
-            synthetic_data.to_csv(os.path.join(self.synthetic_data_dir, "synthetic_data.csv"), index=False)
+            synthetic_df.to_csv(os.path.join(self.synthetic_data_dir, "synthetic_data.csv"), index=False)
             augmented_train = pd.concat([self.df_train, synthetic_df], ignore_index=True)
         else:
             print("No synthetic data generated.")
@@ -127,7 +127,7 @@ class TVAEAugmentor:
             synthetic_df = pd.concat(synthetic_dfs, ignore_index=True)
             print("Size of synthetic data:", synthetic_df.shape)
             os.makedirs(self.synthetic_data_dir, exist_ok=True)
-            synthetic_data.to_csv(os.path.join(self.synthetic_data_dir, "synthetic_data.csv"), index=False)
+            synthetic_df.to_csv(os.path.join(self.synthetic_data_dir, "synthetic_data.csv"), index=False)
             augmented_train = pd.concat([self.df_train, synthetic_df], ignore_index=True)
         else:
             print("No synthetic data generated.")
