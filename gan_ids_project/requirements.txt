@@ -8,5 +8,6 @@ scapy
 sdv
 torch
 gdown
-sdv
 tensorflow
+joblib
+json5

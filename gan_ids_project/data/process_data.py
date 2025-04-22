@@ -142,4 +142,6 @@ if __name__ == "__main__":
         df_train, df_test = load_data(BASE_DATA_DIR, dataset)
         process_data(df_train, df_test)
     
-    df = pd.read_parquet("/Users/axelgyllenhoff/Desktop/Spring_2025/Network_Security_and_Privacy/netsec-project-spring2025/gan_ids_project/data/raw_data/NF-ToN-IoT-v1/NF-ToN-IoT.parquet")
+    DF_LOC = os.path.join(BASE_DATA_DIR, "raw_data", "NF-ToN-IoT-v1", "NF-ToN-IoT.parquet")
+
+    df = pd.read_parquet(DF_LOC)
