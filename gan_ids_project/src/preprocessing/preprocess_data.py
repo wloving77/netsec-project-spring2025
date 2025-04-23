@@ -51,13 +51,32 @@ FEATURES = {
             "label",  # 0, 1 for normal, attack
             "attack_cat",  # categorical for type of attack/no attack
         ],
-    }
+    },
+    "NF-ToN-IoT": {
+        "Input_Features": [
+            "L4_SRC_PORT",
+            "L4_DST_PORT",
+            "PROTOCOL",
+            "L7_PROTO",
+            "IN_BYTES",
+            "OUT_BYTES",
+            "IN_PKTS",
+            "OUT_PKTS",
+            "TCP_FLAGS",
+            "FLOW_DURATION_MILLISECONDS",
+        ],
+        "Output_Features": ["Label", "Attack"],
+    },
 }
 
 
-def load_data(base_data_dir):
-    train_path = os.path.join(base_data_dir, "raw", "UNSW_NB15_training-set.csv")
-    test_path = os.path.join(base_data_dir, "raw", "UNSW-NB15_testing-set.csv")
+def load_data(base_data_dir, dataset):
+    train_path = os.path.join(
+        base_data_dir, "raw", dataset, f"{dataset}_training-set.csv"
+    )
+    test_path = os.path.join(
+        base_data_dir, "raw", dataset, f"{dataset}_testing-set.csv"
+    )
 
     df_train = pd.read_csv(train_path)
     df_test = pd.read_csv(test_path)
@@ -65,7 +84,7 @@ def load_data(base_data_dir):
     return df_train, df_test
 
 
-def process_data(df_train, df_test, dataset):
+def process_data(df_train, df_test):
     input_features = FEATURES[dataset]["Input_Features"]
     output_features = FEATURES[dataset]["Output_Features"]
 
@@ -126,6 +145,8 @@ def process_data(df_train, df_test, dataset):
 
 if __name__ == "__main__":
     BASE_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-    dataset = "UNSW-NB15"
-    df_train, df_test = load_data(BASE_DATA_DIR)
-    process_data(df_train, df_test, dataset)
+    datasets = ["NF-ToN-IoT", "UNSW-NB15"]
+
+    for dataset in datasets:
+        df_train, df_test = load_data(BASE_DATA_DIR, dataset)
+        process_data(df_train, df_test)
