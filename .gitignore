@@ -1,8 +1,8 @@
 venv
 .venv
 *.pyc
-*.csv
 *.txt
 *.egg-info
 *.parquet
+*.zip
 build
