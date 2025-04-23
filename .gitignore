@@ -1,6 +1,5 @@
 .venv
 *.pyc
-*.txt
 *.egg-info
 *.parquet
 *.zip
