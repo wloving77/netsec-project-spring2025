@@ -39,11 +39,12 @@ def make_synthetic_data(
     X_test,
     y_test,
     target_variable,
+    dataset,
     gan_augmentor,
 ):
 
-    base_data_dir = os.path.dirname(os.path.abspath(__file__))
-    synthetic_data_dir = os.path.join(base_data_dir, "../../", "data", "synthetic")
+    BASE_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+    synthetic_data_dir = os.path.join(BASE_DATA_DIR, "synthetic", dataset)
 
     df_train = X_train.copy()
     df_train[target_variable] = y_train
@@ -198,6 +199,7 @@ if __name__ == "__main__":
                 X_test,
                 y_test,
                 target_variable,
+                dataset=dataset,
                 gan_augmentor=augmentor,
             )
         )
