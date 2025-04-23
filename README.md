@@ -25,31 +25,19 @@ While in the root directory install the project module in editable mode with "pi
 
 ---
 
-## 📁 Project Directory Structure
+# Setup Guide:
 
-```bash
-gan_ids_project/
-├── data/                       # Datasets
-│   ├── raw/                    # Original datasets
-│   ├── processed/              # Cleaned + normalized data
-│   └── synthetic/              # GAN-generated traffic samples
-│
-├── src/                        # Core scripts
-│   ├── data_augmentors         # Classes for synthetic data prodiction
-│   ├── models.py               # Model for binary (attack, not attack) OR
-│                               # multi class (type of attack, not attack)
-│   └── utils.py                # helpers: data loading, making synethic 
-│                               # call synth data classes, plotting, model
-│                               # training and evaluation
-│
-├── experiments/                # Outputs & model artifacts
-│   ├── basic_test.py           # Currently all of the test results
-│
-│
-├── .gitignore
-├── LICENSE
-├── README.md
-├── setup.py                    # To download project module 
-├──                             # (pip install -e .)
-└── setup.sh                    # Enviroment setup
-```
+- Initialize `git-lfs`
+    - `apt install git-lfs` or `brew install git-lfs` or it comes with git for windows
+    - `git-lfs install`
+    - `git-lfs pull` 
+- Create a virtual environment:
+    - `python3 -m venv .venv`
+    - `source .venv/bin/activate` activate it
+    - `pip install -r requirements.txt` install dependencies
+- Preprocess Data;
+    - Navigate to `src/preprocessing/`
+    - Run `python3 preprocess_data.py`
+- Run Experiments
+    - Navigate to `experiments/`
+    - Run either of the two notebooks to see current performance #'s
