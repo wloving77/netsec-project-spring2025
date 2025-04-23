@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class NetworkAnomalyDetector(nn.Module):
     def __init__(self, input_dim, num_classes):
         super(NetworkAnomalyDetector, self).__init__()
@@ -15,7 +16,8 @@ class NetworkAnomalyDetector(nn.Module):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         return self.fc3(x)
-    
+
+
 class DeeperNetworkAnomalyDetector(nn.Module):
     def __init__(self, input_dim, num_classes):
         super().__init__()

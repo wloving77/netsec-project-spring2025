@@ -4,3 +4,8 @@
 *.parquet
 *.zip
 build
+
+# ignore the processed directory:
+
+processed/
+synthetic/
