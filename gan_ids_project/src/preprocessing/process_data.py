@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+from pathlib import Path
 
 FEATURES = {
     "UNSW-NB15": {
@@ -124,7 +125,7 @@ def process_data(df_train, df_test, dataset):
 
 
 if __name__ == "__main__":
-    BASE_DATA_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
     dataset = "UNSW-NB15"
     df_train, df_test = load_data(BASE_DATA_DIR)
     process_data(df_train, df_test, dataset)
