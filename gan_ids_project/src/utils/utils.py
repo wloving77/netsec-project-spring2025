@@ -15,7 +15,8 @@ from ..gan.data_augmentors import CTGANAugmentor, TVAEAugmentor
 
 from pathlib import Path
 
-STOP_TRAINING_THRESHOLD = 0.01
+STOP_EARLY_THRESHOLD = 1e-4
+PATIENCE = 10
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def load_data(dataset, target_variable):
@@ -136,7 +137,8 @@ def train_and_evaluate_model(
         class_weights = compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
         class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(device)
 
-        criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
+        # criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
+        criterion = nn.CrossEntropyLoss()
         loss = "Cross Entropy Loss"
     optimizer = optim.Adam(model.parameters(), lr=lr)
     print(f"Loss function: {loss}")
@@ -156,12 +158,20 @@ def train_and_evaluate_model(
             running_loss += loss.item() * batch_X.size(0)
 
         epoch_loss = running_loss / len(train_loader.dataset)
-        if epoch_loss < previous_loss:
-            previous_loss = epoch_loss
+        # Early stopping check
+        best_loss = float("inf")
+        epochs_no_improve = 0
+        if epoch_loss < best_loss - STOP_EARLY_THRESHOLD:  # Tiny threshold to avoid floating point issues
+            best_loss = epoch_loss
+            epochs_no_improve = 0
         else:
-            print(f"Early stopping at epoch {epoch+1}")
+            epochs_no_improve += 1
+
+        if epochs_no_improve >= PATIENCE:
+            print(f"Early stopping triggered at epoch {epoch+1} with best loss {best_loss:.4f}")
             break
-        if (epoch + 1) % 5 == 0:
+
+        if (epoch + 1) % 5 == 0 or epoch == 0:
             print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}")
 
     # eval on test set
@@ -190,7 +200,7 @@ def train_and_evaluate_model(
     )
     plot_conf_matrix(all_labels, all_preds, [str(c) for c in le_target.classes_])
 
-    return model
+    return model, accuracy
 
 
 if __name__ == "__main__":
