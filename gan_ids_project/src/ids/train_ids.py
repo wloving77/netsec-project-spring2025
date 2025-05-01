@@ -25,6 +25,23 @@ def load_combined_data(path):
     y = df["Attack"].apply(lambda x: str(x).lower())
     return X, y
 
+def load_split_data_bin(x_path, y_path):
+    X = pd.read_csv(x_path)
+    y = pd.read_csv(y_path)
+    if "Attack" in y.columns:
+        y = y["Attack"]
+    elif "Label" in y.columns:
+        y = y["Label"]
+    else:
+        y = y.iloc[:, 0]
+    return X, y.apply(lambda x: str(x).lower()).apply(lambda x: 'benign' if x in {'benign', 'normal'} else 'attack')
+
+def load_combined_data_bin(path):
+    df = pd.read_csv(path)
+    X = df.drop("Attack", axis=1)
+    y = df["Attack"].apply(lambda x: str(x).lower()).apply(lambda x: 'benign' if x in {'benign', 'normal'} else 'attack')
+    return X, y
+
 def train_ids(args):
     os.makedirs(os.path.dirname(args.model_out), exist_ok=True)
     os.makedirs(args.results_dir, exist_ok=True)
@@ -49,6 +66,65 @@ def train_ids(args):
     elif args.synthetic and args.x_test and args.y_test:
         X_synth, y_synth = load_combined_data(args.synthetic)
         X_test, y_test = load_split_data(args.x_test, args.y_test)
+
+        # Use only synthetic data for training
+        X_train = X_synth
+        y_train = y_synth
+    print(f"Classes: {y_train.unique()}, Test Classes: {y_test.unique()}")
+    # Encode string labels into integers automatically
+    le_target = LabelEncoder()
+    le_target.fit(pd.concat([y_train, y_test], ignore_index=True))  # Fit on both train + test labels
+    y_train_enc = le_target.transform(y_train)
+    y_test_enc = le_target.transform(y_test)
+
+    # Choose model
+    if args.model == "simple":
+        model_fn = NetworkAnomalyDetector
+    elif args.model == "deeper":
+        model_fn = DeeperNetworkAnomalyDetector
+    else:
+        raise ValueError("Invalid model type: choose 'simple' or 'deeper'.")
+
+    # Train and evaluate
+    model, accuracy = train_and_evaluate_model(
+        X_train=X_train,
+        y_train=y_train_enc,
+        X_test=X_test,
+        y_test=y_test_enc,
+        le_target=le_target,
+        model=model_fn,
+        epochs=50,
+        batch_size=128,
+        lr=0.001,
+    )
+
+    # Save model
+    torch.save(model.state_dict(), args.model_out)
+
+def train_ids_bin(args):
+    os.makedirs(os.path.dirname(args.model_out), exist_ok=True)
+    os.makedirs(args.results_dir, exist_ok=True)
+
+
+    # Load data
+    if args.synthetic and args.x_real and args.y_real and args.x_test and args.y_test:
+        X_real, y_real = load_split_data_bin(args.x_real, args.y_real)
+        X_synth, y_synth = load_combined_data_bin(args.synthetic)
+        X_test, y_test = load_split_data_bin(args.x_test, args.y_test)
+
+        # Combine real and synthetic training data
+        X_train = pd.concat([X_real, X_synth], ignore_index=True)
+        y_train = pd.concat([y_real, y_synth], ignore_index=True)
+    elif args.x_real and args.y_real and args.x_test and args.y_test:
+        X_real, y_real = load_split_data_bin(args.x_real, args.y_real)
+        X_test, y_test = load_split_data_bin(args.x_test, args.y_test)
+
+        # Use only real data for training
+        X_train = X_real
+        y_train = y_real
+    elif args.synthetic and args.x_test and args.y_test:
+        X_synth, y_synth = load_combined_data_bin(args.synthetic)
+        X_test, y_test = load_split_data_bin(args.x_test, args.y_test)
 
         # Use only synthetic data for training
         X_train = X_synth
@@ -168,6 +244,20 @@ def run_ids_training(x_real, y_real, synthetic_path, x_test, y_test, model_out, 
             self.model = model
 
     train_ids(Args())
+
+def run_ids_training_bin(x_real, y_real, synthetic_path, x_test, y_test, model_out, results_dir, model="simple", synthetic=True, real=True):
+    class Args:
+        def __init__(self):
+            self.x_real = x_real
+            self.y_real = y_real
+            self.synthetic = synthetic_path
+            self.x_test = x_test
+            self.y_test = y_test
+            self.model_out = model_out
+            self.results_dir = results_dir
+            self.model = model
+
+    train_ids_bin(Args())
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
