@@ -15,6 +15,9 @@ from ..gan.data_augmentors import CTGANAugmentor, TVAEAugmentor
 
 from pathlib import Path
 
+STOP_EARLY_THRESHOLD = 1e-4
+PATIENCE = 10
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def load_data(dataset, target_variable):
     project_dir = Path().resolve().parents[0]
@@ -102,18 +105,18 @@ def train_and_evaluate_model(
     batch_size=64,
     lr=0.001,
 ):
-    X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32)
-    X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
+    X_train_tensor = torch.tensor(X_train.values, dtype=torch.float32).to(device)
+    X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32).to(device)
 
     num_classes = len(np.unique(y_train, return_counts=True)[1])
-    print(f"number of classes: {num_classes}")
+    print(f"number of classes: {num_classes}, Classes: {np.unique(y_train)}")
 
     if num_classes == 2:
-        y_train_tensor = torch.tensor(y_train.squeeze(), dtype=torch.float32)
-        y_test_tensor = torch.tensor(y_test.squeeze(), dtype=torch.float32)
+        y_train_tensor = torch.tensor(y_train.squeeze(), dtype=torch.float32).to(device)
+        y_test_tensor = torch.tensor(y_test.squeeze(), dtype=torch.float32).to(device)
     else:
-        y_train_tensor = torch.tensor(y_train.squeeze(), dtype=torch.long)
-        y_test_tensor = torch.tensor(y_test.squeeze(), dtype=torch.long)
+        y_train_tensor = torch.tensor(y_train.squeeze(), dtype=torch.long).to(device)
+        y_test_tensor = torch.tensor(y_test.squeeze(), dtype=torch.long).to(device)
 
     # dataloaders for training and testing
     train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
@@ -122,21 +125,31 @@ def train_and_evaluate_model(
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     input_dim = X_train_tensor.shape[1]
-    model = model(input_dim, num_classes)
+    model = model(input_dim, num_classes).to(device)
 
     if num_classes == 2:
         criterion = nn.BCEWithLogitsLoss()
         loss = "Binary Cross Entropy with Logits"
     else:
+        # Compute class weights
+        from sklearn.utils.class_weight import compute_class_weight
+
+        class_weights = compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
+        class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(device)
+
+        # criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
         criterion = nn.CrossEntropyLoss()
-        loss = "Cross Entropy"
+        loss = "Cross Entropy Loss"
     optimizer = optim.Adam(model.parameters(), lr=lr)
     print(f"Loss function: {loss}")
 
     model.train()
+    previous_loss = float("inf")
     for epoch in range(epochs):
         running_loss = 0.0
         for batch_X, batch_y in train_loader:
+            batch_X = batch_X.to(device)
+            batch_y = batch_y.to(device)
             optimizer.zero_grad()
             outputs = model(batch_X).squeeze()
             loss = criterion(outputs, batch_y)
@@ -145,7 +158,21 @@ def train_and_evaluate_model(
             running_loss += loss.item() * batch_X.size(0)
 
         epoch_loss = running_loss / len(train_loader.dataset)
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}")
+        # Early stopping check
+        best_loss = float("inf")
+        epochs_no_improve = 0
+        if epoch_loss < best_loss - STOP_EARLY_THRESHOLD:  # Tiny threshold to avoid floating point issues
+            best_loss = epoch_loss
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+
+        if epochs_no_improve >= PATIENCE:
+            print(f"Early stopping triggered at epoch {epoch+1} with best loss {best_loss:.4f}")
+            break
+
+        if (epoch + 1) % 5 == 0 or epoch == 0:
+            print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}")
 
     # eval on test set
     model.eval()
@@ -153,6 +180,8 @@ def train_and_evaluate_model(
     all_labels = []
     with torch.no_grad():
         for batch_X, batch_y in test_loader:
+            batch_X = batch_X.to(device)
+            batch_y = batch_y.to(device)
             outputs = model(batch_X)
             if num_classes == 2:
                 predicted = (torch.sigmoid(outputs) > 0.5).long()
@@ -171,7 +200,7 @@ def train_and_evaluate_model(
     )
     plot_conf_matrix(all_labels, all_preds, [str(c) for c in le_target.classes_])
 
-    return model
+    return model, accuracy
 
 
 if __name__ == "__main__":
