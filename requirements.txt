@@ -10,3 +10,6 @@ torch
 gdown
 sdv
 tensorflow
+streamlit
+plotly
+watchdog
