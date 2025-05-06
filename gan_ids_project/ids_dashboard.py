@@ -240,11 +240,11 @@ if idx < len(df):
             # Inverse transform to get label (e.g., 'Normal', 'Attack')
             # Ensure the index is within the bounds of the encoder classes
             if 0 <= binary_pred_idx < len(binary_encoder.classes_):
-                 binary_label = binary_encoder.inverse_transform([binary_pred_idx])[0]
-                 is_suspicious = binary_label != "Normal" # Adjust if your normal label is different
+                binary_label = binary_encoder.inverse_transform([binary_pred_idx])[0]
+                is_suspicious = binary_label != "Normal"
             else:
-                 binary_label = f"Unknown Bin Index ({binary_pred_idx})"
-                 is_suspicious = True # Treat unknown as suspicious
+                binary_label = f"Unknown Bin Index ({binary_pred_idx})"
+                is_suspicious = True 
 
 
             # --- Multi-class Prediction ---
@@ -443,3 +443,4 @@ else:
     # If simulation is not active (either finished or hit an error),
     # we don't call rerun, allowing the app to stay on the final state.
     st.info("Simulation paused or finished.")
+
