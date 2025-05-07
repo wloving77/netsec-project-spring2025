@@ -41,3 +41,11 @@ While in the root directory install the project module in editable mode with "pi
 - Run Experiments
     - Navigate to `experiments/`
     - Run either of the two notebooks to see current performance #'s
+
+# How to Spin up Dashboard:
+
+After completing the setup guide above, follow the steps below to spin up the IDS dashboard:
+- Ensure you have successfully installed all packages in `requirements.txt`
+- Ensure you are in the root directory
+- Run the commad `streamlit run gan_ids_project/ids_dashboard.py`
+- You should now be able to access the dashboard via `http://localhost:8501/`

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import joblib
 from pathlib import Path
 import torch
-import plotly.graph_objects as go # Using Plotly for potentially richer charts
+import plotly.graph_objects as go
 
 # === Page Setup ===
 st.set_page_config(
@@ -21,9 +21,11 @@ base_path = parent_dir
 
 # data_file = base_path / "data/processed/NF-ToN-IoT/X_test.csv"
 data_file = base_path / "data/processed/UNSW-NB15/X_test.csv"
-bin_model_file = base_path / "models/bin_tvae.pkl" 
+# bin_model_file = base_path / "models/bin_tvae.pkl" 
+bin_model_file = base_path / "models/ids_models/real_synthetic_UNSW-NB15_bin.pkl"
 bin_encoder_file = base_path / "models/bin_label_encoder.pkl"
-multi_model_file = base_path / "models/multi_tvae.pkl"
+# multi_model_file = base_path / "models/multi_tvae.pkl"
+multi_model_file = base_path / "models/ids_models/real_synthetic_UNSW-NB15_gan.pkl"
 multi_encoder_file = base_path / "models/multi_label_encoder.pkl"
 
 # === Load Resources ===
@@ -49,12 +51,15 @@ def load_model_artifacts(bin_model_p, bin_enc_p, multi_model_p, multi_enc_p):
         if not multi_model_p.exists(): raise FileNotFoundError(multi_model_p)
         if not multi_enc_p.exists(): raise FileNotFoundError(multi_enc_p)
 
-        binary_model = joblib.load(bin_model_p)
-        multi_model = joblib.load(multi_model_p)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        binary_model = torch.load(bin_model_p, map_location=device)
+        multi_model = torch.load(multi_model_p, map_location=device)
+
         binary_encoder = joblib.load(bin_enc_p)
         multi_encoder = joblib.load(multi_enc_p)
 
-        if hasattr(binary_model, 'eval'):
+        if hasattr(binary_model, 'eval'): 
             binary_model.eval()
         if hasattr(multi_model, 'eval'):
             multi_model.eval()
@@ -70,49 +75,43 @@ def load_model_artifacts(bin_model_p, bin_enc_p, multi_model_p, multi_enc_p):
 # --- Load Data and Models ---
 df = load_data(data_file)
 if df is None:
-    st.stop() # Stop execution if data loading failed
+    st.stop() 
 
 binary_model, binary_encoder, multi_model, multi_encoder = load_model_artifacts(
     bin_model_file, bin_encoder_file, multi_model_file, multi_encoder_file
 )
-# Check if any required artifact failed to load
 if binary_model is None or binary_encoder is None or multi_model is None or multi_encoder is None:
     st.error("Stopping execution due to failure loading models or encoders.")
     st.stop()
 
-# Get feature columns (assuming all columns in the loaded CSV are features)
-# It's safer to explicitly define or check against the model's expected features if possible
 feature_columns = df.columns.tolist()
-st.info(f"Loaded dataset with {len(feature_columns)} features.") # Removed listing all features to save space
+st.info(f"Loaded dataset with {len(feature_columns)} features.") 
 
 # === Sidebar Configuration ===
 st.sidebar.title("⚙️ Simulation Controls")
 delay = st.sidebar.slider("Delay between packets (seconds)", 0.05, 3.0, 0.5, 0.05)
 flagged_only = st.sidebar.checkbox("Show only suspicious traffic in table", False)
 max_history_display = st.sidebar.number_input("Max rows in history table", 10, 100, 20)
-auto_scroll = st.sidebar.checkbox("Auto-scroll history table (requires JS hack)", True) # JS Hack needed
+auto_scroll = st.sidebar.checkbox("Auto-scroll history table (requires JS hack)", True) 
 
 # Restart Button
 if st.sidebar.button("🔄 Restart Simulation"):
     st.session_state.index = 0
-    # Reinitialize history DataFrame with correct columns
     st.session_state.history = pd.DataFrame(columns=feature_columns +
                                              ['timestamp', 'binary_prediction', 'multi_prediction', 'suspicious'])
     st.session_state.attack_counts = {}
     st.toast("Simulation Restarted!", icon="🔄")
-    # Give time for toast to show before potential rerun
-    time.sleep(0.5) # Short sleep is usually enough for UI update
+    time.sleep(0.5) 
     st.rerun()
 
 # === Session State Initialization ===
 if "index" not in st.session_state:
     st.session_state.index = 0
 if "history" not in st.session_state:
-    # Add columns we will create later
     st.session_state.history = pd.DataFrame(columns=feature_columns +
                                              ['timestamp', 'binary_prediction', 'multi_prediction', 'suspicious'])
 if "attack_counts" not in st.session_state:
-    st.session_state.attack_counts = {} # To store counts of each attack type
+    st.session_state.attack_counts = {}
 
 
 # === Main Dashboard Area ===
@@ -122,9 +121,8 @@ st.markdown("---")
 # --- Top Row: KPIs & Live Status ---
 kpi_col1, kpi_col2, kpi_col3, live_status_col = st.columns([1, 1, 1, 2])
 
-# Use placeholders defined outside the loop
 total_processed_placeholder = kpi_col1.empty()
-suspicious_total_placeholder = kpi_col2.empty() # Renamed for clarity
+suspicious_total_placeholder = kpi_col2.empty() 
 suspicious_perc_placeholder = kpi_col3.empty()
 live_status_placeholder = live_status_col.empty()
 
@@ -138,12 +136,8 @@ attack_dist_placeholder = chart_col2.empty()
 
 # --- Bottom Row: History Table ---
 st.markdown("### 📜 Live Packet History")
-# Use placeholder defined outside the loop
 table_placeholder = st.empty()
 
-# JavaScript for auto-scrolling the table (optional, can be tricky)
-# This needs to be injected once, not repeatedly in the simulation loop.
-# It might need careful placement or execution after table renders.
 if auto_scroll:
     try:
         st.components.v1.html(
@@ -181,17 +175,16 @@ if auto_scroll:
             // but for a continuous simulation, letting it run is usually fine.
             </script>
             """,
-            height=0, # Set height to 0 to make it invisible
-            scrolling=False # Important for invisible components
+            height=0, 
+            scrolling=False 
         )
     except Exception as e:
          st.warning(f"Could not inject scrolling script: {e}")
 
 
 # === Streaming Simulation Logic (processes one packet per rerun) ===
-
 idx = st.session_state.index
-simulation_active = False # Assume simulation is not active unless we proceed
+simulation_active = False 
 
 # Check if we reached the end of the data
 if idx < len(df):
@@ -201,44 +194,35 @@ if idx < len(df):
     timestamp = datetime.now()
 
     # --- Prepare Data for Model ---
-    # Already confirmed data is numeric and scaled - ensure it's float32 for torch
-    X_features = row_series.values.astype(np.float32) # Explicitly cast to float32
-    X = X_features # X is now a float32 numpy array
+    X_features = row_series.values.astype(np.float32) 
+    X = X_features 
 
     # --- CRITICAL: Reshape for PyTorch Model ---
-    # Assumption: Models expect [batch_size, num_features] = [1, 10]
     try:
-        # Convert numpy array to PyTorch tensor
-        X_tensor = torch.from_numpy(X).unsqueeze(0) # Shape: [1, num_features]
+        X_tensor = torch.from_numpy(X).unsqueeze(0) 
     except Exception as e:
         st.error(f"Error creating tensor for row {idx}: {e}")
-        simulation_active = False # Stop simulation on tensor creation error
+        simulation_active = False 
 
 
     # --- Model Prediction ---
-    # Initialize prediction variables
     binary_label = "Not Processed"
     multi_label = "Not Processed"
     is_suspicious = False
 
-    if simulation_active: # Only predict if tensor creation was successful
+    if simulation_active: 
         try:
             # --- Binary Prediction ---
-            binary_model.eval() # Ensure model is in eval mode
-            with torch.no_grad(): # Disable gradient calculation for inference
+            binary_model.eval() 
+            with torch.no_grad(): 
                 output = binary_model(X_tensor)
 
-                # Handle different output shapes (e.g., logits for 2 classes vs single logit)
                 if output.shape[1] > 1:
-                    # Assumes output layer has N nodes (logits for N classes)
                     binary_pred_idx = torch.argmax(output, dim=1).item()
                 else:
-                    # Assumes output layer has 1 node (logit), apply sigmoid and round for binary
                     binary_pred_float = torch.sigmoid(output).item()
                     binary_pred_idx = int(round(binary_pred_float))
 
-            # Inverse transform to get label (e.g., 'Normal', 'Attack')
-            # Ensure the index is within the bounds of the encoder classes
             if 0 <= binary_pred_idx < len(binary_encoder.classes_):
                 binary_label = binary_encoder.inverse_transform([binary_pred_idx])[0]
                 is_suspicious = binary_label != "Normal"
@@ -248,39 +232,33 @@ if idx < len(df):
 
 
             # --- Multi-class Prediction ---
-            if is_suspicious: # Only run multi-class if binary flagged it
-                multi_model.eval() # Ensure model is in eval mode
-                with torch.no_grad(): # Disable gradient calculation
+            if is_suspicious:
+                multi_model.eval() 
+                with torch.no_grad(): 
                     multi_output = multi_model(X_tensor)
-                    multi_pred_idx = torch.argmax(multi_output, dim=1).item() # Get index as Python int
+                    multi_pred_idx = torch.argmax(multi_output, dim=1).item() 
 
-                # Inverse transform to get label (e.g., 'DoS', 'Analysis', 'Normal')
-                # Ensure the index is within the bounds of the encoder classes
                 if 0 <= multi_pred_idx < len(multi_encoder.classes_):
                     multi_label = multi_encoder.inverse_transform([multi_pred_idx])[0]
-                     # Update attack counts only if it's a specific attack type and not "Normal"
                     if multi_label != "Normal":
                         st.session_state.attack_counts[multi_label] = st.session_state.attack_counts.get(multi_label, 0) + 1
                 else:
                      multi_label = f"Unknown Multi Index ({multi_pred_idx})"
-                     # If multi-class prediction is weird, count it under unknown
                      st.session_state.attack_counts[multi_label] = st.session_state.attack_counts.get(multi_label, 0) + 1
 
             else:
-                 # If binary prediction is Normal, multi-class is also Normal
                 multi_label = "Normal"
 
         except Exception as e:
             st.warning(f"⚠️ Prediction error on row {idx}: {e}")
             binary_label = "Prediction Error"
             multi_label = "Prediction Error"
-            is_suspicious = True # Mark as suspicious if prediction failed
+            is_suspicious = True 
 
 
     # --- Update History DataFrame ---
-    # Always append the row processed (even if prediction failed, so we have a record)
     new_row_dict = row_series.to_dict()
-    new_row_dict["timestamp"] = timestamp # Use the timestamp captured earlier
+    new_row_dict["timestamp"] = timestamp
     new_row_dict["binary_prediction"] = binary_label
     new_row_dict["multi_prediction"] = multi_label
     new_row_dict["suspicious"] = is_suspicious
@@ -293,11 +271,9 @@ if idx < len(df):
 
 
 # --- Update Dashboard Elements (based on current state in session_state) ---
-# These are now called on every rerun, which happens after each packet simulation step
 
 # KPIs
 total_processed = len(st.session_state.history)
-# Ensure 'suspicious' column exists and is boolean before summing
 if 'suspicious' in st.session_state.history.columns and pd.api.types.is_bool_dtype(st.session_state.history['suspicious']):
      suspicious_total = st.session_state.history['suspicious'].sum()
      suspicious_perc = (suspicious_total / total_processed * 100) if total_processed > 0 else 0
@@ -310,9 +286,7 @@ total_processed_placeholder.metric("Total Packets Processed", f"{total_processed
 suspicious_total_placeholder.metric("🚨 Total Suspicious Flagged", f"{suspicious_total:,}")
 suspicious_perc_placeholder.metric("% Suspicious Traffic", f"{suspicious_perc:.2f}%")
 
-# Live Status (Update based on the *last* processed packet if simulation was active)
-if simulation_active: # Only update the status box if a packet was just processed
-    # Use the results from the packet just processed at index `idx`
+if simulation_active:
     last_packet_status_color = "🟥 SUSPICIOUS" if is_suspicious else "🟩 Normal"
     last_packet_status_details = f"Type: {multi_label}" if is_suspicious else "Type: Normal"
     live_status_placeholder.markdown(f"""
@@ -326,12 +300,9 @@ if simulation_active: # Only update the status box if a packet was just processe
     # Display a warning *below* the status box only if suspicious
     if is_suspicious:
          st.warning(f"Suspicious activity detected: **{multi_label}**")
-    # Note: Clearing previous warnings automatically in this structure is harder.
-    # They will persist until a new warning overwrites them or the script structure changes.
+
 else:
-     # Display a message when simulation is finished
-     if idx >= len(df) and total_processed > 0: # Simulation finished, show final status of last packet? Or just end message?
-         # Option 1: Show status of the last packet processed
+     if idx >= len(df) and total_processed > 0: 
          last_row = st.session_state.history.iloc[-1]
          last_status_color = "🟥 SUSPICIOUS" if last_row['suspicious'] else "🟩 Normal"
          last_status_details = f"Type: {last_row['multi_prediction']}" if last_row['suspicious'] else "Type: Normal"
@@ -342,29 +313,26 @@ else:
                 <small>Status of last packet: {last_status_color} - {last_status_details}</small>
             </div>
          """, unsafe_allow_html=True)
-     elif idx >= len(df): # Simulation finished, but no data processed?
+     elif idx >= len(df): 
          live_status_placeholder.markdown("<center>Simulation finished. No data processed.</center>", unsafe_allow_html=True)
-     else: # Simulation not active (e.g. error loading tensor)
+     else: 
           live_status_placeholder.markdown("<center>Simulation stopped due to processing error.</center>", unsafe_allow_html=True)
-
 
 # Live Table
 history_view = st.session_state.history.copy()
 if flagged_only:
     history_view = history_view[history_view["suspicious"] == True]
 
-# Ensure consistent column order, putting new ones first
 display_columns_order = ['timestamp', 'binary_prediction', 'multi_prediction', 'suspicious'] + feature_columns
-# Filter display_columns_order to only include columns actually present in the dataframe
 display_columns_filtered = [col for col in display_columns_order if col in history_view.columns]
 
 
 if not history_view.empty:
     table_placeholder.dataframe(
-        history_view[display_columns_filtered].tail(max_history_display).sort_index(ascending=False), # Show latest first
+        history_view[display_columns_filtered].tail(max_history_display).sort_index(ascending=False), 
         use_container_width=True,
         hide_index=True,
-        column_config={ # Nicer timestamp formatting
+        column_config={ 
              "timestamp": st.column_config.DatetimeColumn(
                 "Timestamp",
                 format="YYYY-MM-DD HH:mm:ss.SSS",
@@ -373,18 +341,13 @@ if not history_view.empty:
         }
     )
 else:
-    # Display an empty table or a message if the history view is empty
-    # Use the filtered display columns so the empty table has the right headers
      table_placeholder.dataframe(pd.DataFrame(columns=display_columns_filtered), use_container_width=True)
 
 
 # --- Update Charts (updated every rerun) ---
-# Suspicious Trend Chart
 trend_data = st.session_state.history.copy()
-# Need at least 2 points to show a trend line meaningfully
 if len(trend_data) > 1:
-    trend_data['time_agg'] = pd.to_datetime(trend_data["timestamp"]).dt.floor("5S") # Aggregate per 5 seconds
-    # Ensure there are actual points after aggregation
+    trend_data['time_agg'] = pd.to_datetime(trend_data["timestamp"]).dt.floor("5S") 
     if not trend_data['time_agg'].empty:
         summary = trend_data.groupby("time_agg").agg(
             suspicious_count=("suspicious", "sum"),
@@ -400,16 +363,13 @@ if len(trend_data) > 1:
             yaxis_title="% Suspicious Packets",
             height=300,
             margin=dict(l=20, r=20, t=40, b=20),
-            xaxis=dict(rangemode='tozero') # Start x-axis from 0 or first data point
+            xaxis=dict(rangemode='tozero') 
         )
-        # Key is needed, but it's now called only once per rerun cycle
         suspicious_trend_placeholder.plotly_chart(fig_trend, use_container_width=True, key="suspicious_trend_chart")
     else:
          suspicious_trend_placeholder.markdown("<center><i>Not enough data yet for Suspicious Trend chart.</i></center>", unsafe_allow_html=True) # Key for markdown placeholder
 else:
-    # Display a placeholder message if not enough data for the chart
     suspicious_trend_placeholder.markdown("<center><i>Not enough data yet for Suspicious Trend chart.</i></center>", unsafe_allow_html=True)
-
 
 # Attack Distribution Chart (Pie Chart)
 attack_counts = st.session_state.attack_counts
@@ -422,25 +382,18 @@ if attack_counts:
         title="Distribution of Detected Attack Types",
         height=300,
         margin=dict(l=20, r=20, t=40, b=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1) # Place legend outside plot area
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1) 
     )
-    # Key is needed, but it's now called only once per rerun cycle
     attack_dist_placeholder.plotly_chart(fig_pie, use_container_width=True)
 else:
-     # Display a placeholder message if no attacks detected
      attack_dist_placeholder.markdown("<center><i>No specific attack types detected yet.</i></center>", unsafe_allow_html=True)
 
 
 # === Increment index and Trigger Rerun ===
-# This logic comes AFTER updating the UI elements so they display the results
-# of the packet that was just processed.
-if simulation_active: # Only proceed if the packet was processed without critical error and not at end of data
+if simulation_active: 
     st.session_state.index += 1
-    # Trigger a rerun to process the next packet after a delay
     time.sleep(delay)
     st.rerun()
 else:
-    # If simulation is not active (either finished or hit an error),
-    # we don't call rerun, allowing the app to stay on the final state.
     st.info("Simulation paused or finished.")
 
